@@ -1,0 +1,114 @@
+---
+title: "Lab3"
+author: "Viktor Ushkov"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+### Задание 2
+
+Объедините таблицы в одну, уберите столбец с территорией торговли, т.к. там только Евросоюз, оставим только строки с экспортом и импортом, вынесите данные по экспорту и импорту в отдельные переменные. Постройте линейный график изменения экспорта по годам обозначив разные группы экспортируемых товаров разным цветом. Подпишите значения на графике. Отрегулируйте местоположение подписей так, чтобы рисунок был максимально наглядным. Придумайте новые названия графика и осей.
+
+```{r warning=FALSE}
+# Подключаем пакеты tidyverse
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+```
+
+Функция для отрисовки графика
+
+```{r warning=FALSE}
+export_plot <- function(df) {
+  export_data <- df %>% group_by(sitc06, time) %>% summarise(export = sum(export))
+  group <- export_data$sitc06
+  
+  options(scipen = 999)
+  
+  e_plot <- ggplot(export_data, aes(x = time, y = export, group = group)) + geom_line(aes(color=sitc06)) + geom_point(aes(color=sitc06))
+  e_plot <- e_plot + geom_text(aes(y = export, label = export), nudge_x = -50, nudge_y = -10000, size=1.25) 
+  e_plot <- e_plot + labs(x = "Год", y = "Сумма экспорта, млн. евро", 
+                          title = 'Экспорт групп товаров',
+                          color = "Обозначения")
+  
+  print(e_plot)
+}
+```
+
+Работа с данными
+
+```{r warning=FALSE}
+# загружаем данные
+load('data/trades.RData')
+# объединяем все тибблы в один
+result_tibble <- reduce(trades, union)
+# убираем столбец с территорией торговли
+result_tibble <- select(result_tibble, -geo)
+# оставляем только строки с импортом и экспортом: для этого подготовим фильтр
+fltr = stringr::str_detect(result_tibble$indic_et, 'Imports in million of ECU/EURO|Exports in million of ECU/EURO')
+# применяем фильтр
+result_tibble <- dplyr::filter(result_tibble, fltr)
+# выносим экспорт и импорт в разные переменные
+result_tibble <- result_tibble %>% pivot_wider(names_from = indic_et, values_from = values)
+result_tibble <- rename(result_tibble, import = 'Imports in million of ECU/EURO',
+                                   export = 'Exports in million of ECU/EURO')
+export_plot(result_tibble)
+```
+
+К сожалению, значения на графиках внизу из-за очень близких позиций иногда перекрывают друг друга :(
+
+### Задание 11
+
+На портале открытых данных Тульской области есть данные о распределении площади лесов и запасов древесины по преобладающим породам и группам возраста <https://opendata71.ru/opendata/7107096442-stateforestregisterTularegion/table>. Скачайте эти данные в виде таблицы CSV и постройте по ним круговую и столбчатую диаграмму для категории. Площадь земель, занятых лесными насаждениями (покрытых лесной растительностью), всего. Подберите цвета, попробуйте изменить ориентировку столбцов на горизонтальную, а для круговой диаграммы поменяйте угол поворота. Подпишите значения.
+
+```{r warning=FALSE}
+# подключаем ggplot2
+library(ggplot2)
+```
+
+Функции для отрисовки графиков
+
+```{r warning=FALSE}
+# столбчатая диаграмма
+bar_chart <- function(df){
+  bar_plot <- ggplot(data = df, mapping = aes(x = Породы, y = Значение_показателя, fill = Породы)) +
+    geom_col() + 
+    coord_flip() +
+    xlab("Породы") + ylab("Тыс. га") +
+    ggtitle('Площадь земель, занятых лесными насаждениями') + 
+    geom_text(aes(label = Значение_показателя), vjust = 0.5) + 
+    guides(fill = guide_legend(title = "Породы", override.aes = aes(label = "")))
+ 
+  print(bar_plot)
+}  
+
+pie_chart <- function(df){
+  # круговая диаграмма
+  pie_plot <- ggplot(data = df, mapping = aes(x = '', y = Значение_показателя, fill = Породы)) +
+    geom_col() + 
+    coord_polar(theta = 'y') +
+    ggtitle('Площадь земель, занятых лесными насаждениями') + ylab('Тыс. га') +
+    guides(fill = guide_legend(title = "Породы", override.aes = aes(label = ""))) 
+  
+  print(pie_plot)
+}
+```
+
+Работа с данными
+
+```{r warning=FALSE}
+# загружаем таблицу
+data <- read.csv('data/TulaRegionWoods.csv', sep=";")
+colnames(data) <- c("Породы", "Показатель", "Единица_измерения", "Значение_показателя")
+# выбираем нужные данные
+plots_data <- subset(data, Показатель == "Площадь земель, занятых лесными насаждениями (покрытых лесной растительностью), всего")
+# корректируем числовые значения
+plots_data$Значение_показателя <- as.numeric(sub(',', '.', plots_data$Значение_показателя))
+# вызов функций графиков
+bar_chart(plots_data)
+pie_chart(plots_data)
+```
